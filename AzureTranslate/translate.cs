@@ -2,6 +2,7 @@
 // 
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Linq;
 using System.Text;
 using System.Net;
@@ -14,17 +15,34 @@ using System.ServiceModel;
 
 namespace AzureTranslate {
 
-    public class Translation {
 
-        public static String Execute(String text, String lang) {
+    public static class Translation {
+
+
+        //Get Client Id and Client Secret from https://datamarket.azure.com/developer/applications/
+        //Refer obtaining AccessToken (http://msdn.microsoft.com/en-us/library/hh454950.aspx) 
+        private static string _azure_client_id = System.Configuration.ConfigurationManager.AppSettings["AzureClientID"];
+        public static string azure_client_id {
+            get { return _azure_client_id; }
+            set { _azure_client_id = value; } 
+        }
+
+        private static string _azure_client_secret = System.Configuration.ConfigurationManager.AppSettings["AzureClientSecret"];
+        public static string azure_client_secret {
+            get { return _azure_client_secret; }
+            set { _azure_client_secret = value; } 
+        }
+        
+        public static String Execute(String text, String lang, String client_id = null, String client_secret = null) {
 
             AdmAccessToken admToken;
             string headerValue;
-            //Get Client Id and Client Secret from https://datamarket.azure.com/developer/applications/
-            //Refer obtaining AccessToken (http://msdn.microsoft.com/en-us/library/hh454950.aspx) 
 
-            //Insert your Client ID and Client Secret below
-            AdmAuthentication admAuth = new AdmAuthentication("ClientID", "ClientSecret");
+            // Checks if azure login info is overriden
+            client_id = client_id == null ? azure_client_id : client_id;
+            client_secret = client_secret == null ? azure_client_secret : client_secret;
+
+            AdmAuthentication admAuth = new AdmAuthentication(client_id, client_secret);
             admToken = admAuth.GetAccessToken();
             DateTime tokenReceived = DateTime.Now;
             // Create a header with the access_token property of the returned token
