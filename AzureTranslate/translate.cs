@@ -1,4 +1,4 @@
-﻿// This is a simple namespace you can use to connect and query the microsoft translation service through Azure Marketplace
+// This is a simple namespace you can use to connect and query the microsoft translation service through Azure Marketplace
 // 
 using System;
 using System.Collections.Generic;
@@ -32,8 +32,9 @@ namespace AzureTranslate {
             get { return _azure_client_secret; }
             set { _azure_client_secret = value; } 
         }
-        
-        public static String Execute(String text, String lang, String client_id = null, String client_secret = null) {
+
+        // Generate the header value / auth token we need to provide for access validation to the translation service
+        private static string GenerateAuthToken(string client_id = null, string client_secret = null) {
 
             AdmAccessToken admToken;
             string headerValue;
@@ -47,7 +48,20 @@ namespace AzureTranslate {
             DateTime tokenReceived = DateTime.Now;
             // Create a header with the access_token property of the returned token
             headerValue = "Bearer " + admToken.access_token;
-            return TranslateMethod(headerValue, text, lang);
+
+            // Return header
+            return headerValue;
+
+        }
+        
+        public static String Execute(String text, String lang, String client_id = null, String client_secret = null) {
+
+            return TranslateMethod(
+                GenerateAuthToken(client_id, client_secret),
+                text,
+                lang
+            );
+
         }
 
         private static String TranslateMethod(string authToken, string text, string lang) {
@@ -64,6 +78,70 @@ namespace AzureTranslate {
                 //Keep appId parameter blank as we are sending access token in authorization header.
                 return client.Translate("", text, "en", lang, "text/html", "general");
             }
+        }
+
+
+        // Translate an array of strings to a given language.
+        // Pass an integer by reference (i.e. error_count) to track how many (if any) translations fail.
+        // Returns a list of strings in the same order as the original array.
+        public static List<string> TranslateArray(string[] texts, string lang, ref int error_count, string client_id = null, string client_secret = null) {
+
+            string authToken = GenerateAuthToken();
+
+            TranslatorService.LanguageServiceClient client = new TranslatorService.LanguageServiceClient();
+            //Set Authorization header before sending the request
+            HttpRequestMessageProperty httpRequestProperty = new HttpRequestMessageProperty();
+            httpRequestProperty.Method = "POST";
+            httpRequestProperty.Headers.Add("Authorization", authToken);
+
+            // Define options for all text strings
+            TranslatorService.TranslateOptions options = new TranslatorService.TranslateOptions();
+            options.ContentType = "text/html";
+
+            // Track output, whether we get a valid translation or fallback to the original string on error.
+            List<string> translations = new List<string>();
+
+            // Creates a block within which an OperationContext object is in scope.
+            using (OperationContextScope scope = new OperationContextScope(client.InnerChannel)) {
+                OperationContext.Current.OutgoingMessageProperties[HttpRequestMessageProperty.Name] = httpRequestProperty;
+                //Keep appId parameter blank as we are sending access token in authorization header.
+                //return client.Translate("", text, "en", lang, "text/html", "general");
+
+                TranslatorService.TranslateArrayResponse[] results = client.TranslateArray(
+                    "",
+                    texts,
+                    "en", // from English
+                    lang, // to given language
+                    options // options for entire array of strings
+                );
+
+                // Iterate translation output
+                int i;
+                for (i = 0; i < results.Length; i += 1)
+                {
+                    // Convenience
+                    TranslatorService.TranslateArrayResponse result = results[i];
+
+                    // Error check
+                    if (result.Error != null)
+                    {
+                        // Increment by-reference error counter
+                        error_count += 1;
+
+                        // Fall back to original string
+                        translations.Add(texts[i]);
+                    }
+
+                    else
+                    {
+                        // Add translated output
+                        translations.Add(result.TranslatedText);
+                    }
+                }
+            }
+
+            // Return translations
+            return translations;
         }
 
     }
